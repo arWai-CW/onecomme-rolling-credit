@@ -100,6 +100,8 @@ describe('helpers', () => {
     const b = normalizeSettings({ sections: [{ key: 'raids', enabled: true, title: '自訂' }] as never })
     expect(b.sections.find((x) => x.key === 'raids')!.title).toBe('自訂')
     expect(normalizeSettings(undefined).speed).toBe(150)
+    expect(normalizeSettings(undefined).preDelay).toBe(0)
+    expect(normalizeSettings({ preDelay: 99 } as never).preDelay).toBe(60)
   })
 
   it('formats amounts in their own currency', () => {

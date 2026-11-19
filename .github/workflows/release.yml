@@ -22,8 +22,8 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
-          sed -i "s/^  version: '.*',$/  version: '$VERSION',/" src/plugin/index.ts
-          grep -q "  version: '$VERSION'," src/plugin/index.ts
+          sed -i "s/^const VERSION = '.*'$/const VERSION = '$GITHUB_REF_NAME'/" src/plugin/index.ts
+          grep -q "const VERSION = '$GITHUB_REF_NAME'" src/plugin/index.ts
 
       - run: npm run check
       - run: npm test

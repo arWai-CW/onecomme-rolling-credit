@@ -16,20 +16,27 @@
   const showCredit = $derived(!pro || settings.showCredit)
 
   let viewport: HTMLDivElement | undefined = $state()
+  let stage: HTMLDivElement | undefined = $state()
+  let background: HTMLDivElement | undefined = $state()
   let track: HTMLDivElement | undefined = $state()
   let ending: HTMLDivElement | undefined = $state()
 
   let animations: Animation[] = []
 
+  /** Reveal duration once the pre-delay is over. */
+  const FADE_IN_MS = 600
+
   /**
    * Timeline (all at the same speed):
+   * 0. Nothing is shown for `preDelay` seconds (use it to cover the OBS transition).
+   *    Then the whole stage fades in.
    * 1. The list (track) scrolls up from below the screen until it has fully left the top.
    * 2. The ending follows the list and stops at the center of the screen.
    * 3. When both are done (the area above the ending is empty), the ending stays
    *    for `endHold` seconds, then fades out over `fadeOut` seconds.
    */
   function play() {
-    if (!viewport || !track || !ending) return
+    if (!viewport || !track || !ending || !stage) return
     for (const a of animations) a.cancel()
     animations = []
 
@@ -46,7 +53,20 @@
     const endTo = (vh - endH) / 2
 
     const t = scrollTimeline(trackFrom - trackTo, endFrom - endTo, settings)
-    const delay = settings.startDelay * 1000
+    const preDelay = settings.preDelay * 1000
+    const delay = preDelay + settings.startDelay * 1000
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    // Keep the stage hidden until the pre-delay is over, then reveal it.
+    // `fill: backwards` holds the first keyframe during the delay.
+    animations.push(
+      stage.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: reduceMotion ? 1 : FADE_IN_MS,
+        delay: preDelay,
+        easing: 'ease-out',
+        fill: 'both',
+      }),
+    )
 
     if (trackH > 0) {
       animations.push(
@@ -67,14 +87,25 @@
       }),
     )
     if (settings.fadeOut > 0) {
+      const fadeDelay = delay + t.total * 1000 + settings.endHold * 1000
       animations.push(
         ending.animate([{ opacity: 1 }, { opacity: 0 }], {
           duration: settings.fadeOut * 1000,
-          delay: delay + t.total * 1000 + settings.endHold * 1000,
+          delay: fadeDelay,
           easing: 'ease-in-out',
           fill: 'both',
         }),
       )
+      if (background) {
+        animations.push(
+          background.animate([{ opacity: settings.backgroundOpacity }, { opacity: 0 }], {
+            duration: settings.fadeOut * 1000,
+            delay: fadeDelay,
+            easing: 'ease-in-out',
+            fill: 'both',
+          }),
+        )
+      }
     }
   }
 
@@ -107,35 +138,49 @@
   style:--font={settings.fontFamily}
   style:--scale={settings.fontScale}
 >
-  <div class="track" bind:this={track}>
-    {#each sections as section (section.key)}
-      <section class="section" aria-label={section.title}>
-        <h2>{section.title}</h2>
-        <ul>
-          {#each section.rows as row (row.key)}
-            <li>
-              {#if row.profileImage}
-                <img src={row.profileImage} alt="" referrerpolicy="no-referrer" />
-              {/if}
-              <span class="name">{row.name}</span>
-              {#if row.detail}
-                <span class="detail">{row.detail}</span>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-      </section>
-    {/each}
-  </div>
+  <div class="stage" bind:this={stage}>
+    {#if settings.backgroundType !== 'none'}
+      <div
+        class="background"
+        bind:this={background}
+        style:background-color={settings.backgroundColor}
+        style:opacity={settings.backgroundOpacity}
+        style:--blur="{settings.backgroundBlur}px"
+        style:background-image={settings.backgroundType === 'image' && settings.backgroundImage
+          ? `url("${settings.backgroundImage.replace(/[\\"]/g, '\\$&')}")`
+          : 'none'}
+      ></div>
+    {/if}
+    <div class="track" bind:this={track}>
+      {#each sections as section (section.key)}
+        <section class="section" aria-label={section.title}>
+          <h2>{section.title}</h2>
+          <ul>
+            {#each section.rows as row (row.key)}
+              <li>
+                {#if row.profileImage}
+                  <img src={row.profileImage} alt="" referrerpolicy="no-referrer" />
+                {/if}
+                <span class="name">{row.name}</span>
+                {#if row.detail}
+                  <span class="detail">{row.detail}</span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/each}
+    </div>
 
-  <div class="ending" bind:this={ending}>
-    <h1>{settings.endTitle}</h1>
-    {#if settings.endSubtitle}
-      <p>{settings.endSubtitle}</p>
-    {/if}
-    {#if showCredit}
-      <p class="credit">Powered by わんコメ</p>
-    {/if}
+    <div class="ending" bind:this={ending}>
+      <h1>{settings.endTitle}</h1>
+      {#if settings.endSubtitle}
+        <p>{settings.endSubtitle}</p>
+      {/if}
+      {#if showCredit}
+        <p class="credit">Powered by わんコメ</p>
+      {/if}
+    </div>
   </div>
 </div>
 
@@ -150,6 +195,23 @@
     text-shadow:
       0 0 0.25em rgb(0 0 0 / 0.9),
       0 0.05em 0.1em rgb(0 0 0 / 0.9);
+  }
+
+  .stage {
+    position: absolute;
+    inset: 0;
+    /* Hidden until the play() animation starts, so the pre-delay stays blank. */
+    opacity: 0;
+  }
+
+  .background {
+    position: absolute;
+    inset: calc(-1 * var(--blur));
+    background-position: center;
+    background-size: cover;
+    filter: blur(var(--blur));
+    pointer-events: none;
+    z-index: -1;
   }
 
   .track,

@@ -1,4 +1,4 @@
-import { PLUGIN_UID, type PluginAction, type StateResponse } from '../../shared/types'
+import { PLUGIN_UID, type PluginAction, type StateResponse, type UpdateStatus } from '../../shared/types'
 
 // Relative to the page (served from localhost:11180/plugins/<uid>/) when possible,
 // absolute for the Vite dev server.
@@ -26,6 +26,20 @@ async function unwrap<T>(res: Response): Promise<T> {
 
 export async function fetchState(): Promise<StateResponse> {
   return unwrap<StateResponse>(await fetch(ENDPOINT, { cache: 'no-store' }))
+}
+
+export async function fetchUpdate(params: { force?: boolean } = {}): Promise<UpdateStatus> {
+  const query = new URLSearchParams({ action: 'checkUpdate' })
+  if (params.force) query.set('force', '1')
+  const res = await fetch(`${ENDPOINT}?${query}`, { cache: 'no-store' })
+  const body = (await res.json()) as { code?: number; response?: unknown }
+  return (body.response ?? {}) as UpdateStatus
+}
+
+export async function installUpdate(): Promise<UpdateStatus> {
+  const res = await fetch(`${ENDPOINT}?action=installUpdate`, { method: 'POST' })
+  const body = (await res.json()) as { code?: number; response?: unknown }
+  return (body.response ?? {}) as UpdateStatus
 }
 
 export async function postAction(action: PluginAction): Promise<StateResponse> {

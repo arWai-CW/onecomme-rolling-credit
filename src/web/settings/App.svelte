@@ -1,10 +1,10 @@
 <script lang="ts">
   import Credits from '../components/Credits.svelte'
-  import { fetchState, postAction } from '../lib/api'
+  import { fetchState, fetchUpdate, installUpdate, postAction } from '../lib/api'
   import { demoState } from '../lib/demo'
   import { DEFAULT_SETTINGS, SECTION_DEFAULT_TITLES } from '../../shared/defaults'
   import { activeSessions, buildCredits } from '../../shared/credits'
-  import { PLUGIN_UID, type SectionKey, type Settings, type StateResponse } from '../../shared/types'
+  import { PLUGIN_UID, type SectionKey, type Settings, type StateResponse, type UpdateStatus } from '../../shared/types'
 
   const SECTION_LABELS: Record<SectionKey, string> = {
     raids: '降落（Raid / 重新導向）',
@@ -28,6 +28,8 @@
   let dragIndex: number | undefined = $state()
   let pw = $state(0)
   let ph = $state(0)
+  let update = $state<UpdateStatus | undefined>()
+  let updating = $state(false)
   const scale = $derived(Math.max(0.05, Math.min((pw - 32) / 1920, (ph - 96) / 1080)))
 
   const dirty = $derived(server ? JSON.stringify(server.settings) !== JSON.stringify(settings) : false)
@@ -50,12 +52,38 @@
     }, 2500)
   }
 
+  async function checkUpdate(force = false) {
+    updating = true
+    try {
+      update = await fetchUpdate({ force })
+    } catch (e) {
+      showToast(`檢查更新失敗：${e instanceof Error ? e.message : e}`)
+    } finally {
+      updating = false
+    }
+  }
+
+  async function doInstall() {
+    if (!confirm('更新後必須重新載入 OneComme 插件才會生效。要繼續嗎？')) return
+    updating = true
+    try {
+      update = await installUpdate()
+      showToast(update.installed ? '已安裝，請重新載入 OneComme 插件' : '目前已是最新版本')
+    } catch (e) {
+      showToast(`更新失敗：${e instanceof Error ? e.message : e}`)
+    } finally {
+      updating = false
+    }
+  }
+
   async function load() {
     try {
       const s = await fetchState()
       server = s
       settings = structuredClone(s.settings)
+      update = s.update
       loadError = ''
+      checkUpdate()
     } catch (e) {
       loadError = `無法連線到 OneComme（${e instanceof Error ? e.message : e}）。請確認 OneComme 已啟動，並已啟用本插件。`
     }
@@ -264,6 +292,7 @@
       <label>捲動速度（px / 秒）<input type="number" min="5" max="2000" bind:value={settings.speed} /></label>
       <label>最長時間（秒，0 = 不限制）<input type="number" min="0" max="3600" bind:value={settings.maxDuration} /></label>
       <label>開始前等待（秒）<input type="number" min="0" max="60" step="0.5" bind:value={settings.startDelay} /></label>
+      <label>載入前延遲（秒，可配合轉場）<input type="number" min="0" max="60" step="0.5" bind:value={settings.preDelay} /></label>
       <label>結尾停留（秒）<input type="number" min="0" max="600" step="0.5" bind:value={settings.endHold} /></label>
       <label>淡出時間（秒，0 = 不淡出）<input type="number" min="0" max="60" step="0.5" bind:value={settings.fadeOut} /></label>
       <label>結尾標題<input type="text" bind:value={settings.endTitle} /></label>
@@ -276,6 +305,56 @@
         <label class="check"><input type="checkbox" bind:checked={settings.showCredit} /> 顯示 OneComme credit</label>
       {/if}
       <label class="check"><input type="checkbox" bind:checked={settings.debugLog} /> 除錯：把原始事件寫入 plugin.log</label>
+    </section>
+
+    <section class="card grid">
+      <h2>背景</h2>
+      <label>背景類型
+        <select bind:value={settings.backgroundType}>
+          <option value="none">無（透明）</option>
+          <option value="color">純色</option>
+          <option value="image">圖片</option>
+        </select>
+      </label>
+      <label>背景顏色<input type="color" bind:value={settings.backgroundColor} /></label>
+      <label class="wide">圖片網址或路徑（放在插件資料夾可用相對路徑，例如 bg.jpg）
+        <input
+          type="text"
+          bind:value={settings.backgroundImage}
+          disabled={settings.backgroundType !== 'image'}
+          placeholder="bg.jpg 或 https://..."
+        />
+      </label>
+      <label>不透明度（{Math.round(settings.backgroundOpacity * 100)}%）
+        <input type="range" min="0" max="1" step="0.05" bind:value={settings.backgroundOpacity} />
+      </label>
+      <label>磨砂模糊（{settings.backgroundBlur} px）
+        <input type="range" min="0" max="40" step="1" bind:value={settings.backgroundBlur} />
+      </label>
+      <p class="muted small wide">背景只在播放時出現，透明度與模糊可讓文字更易讀；圖片載入失敗時會顯示背景顏色。</p>
+    </section>
+
+    <section class="card">
+      <h2>更新</h2>
+      <p class="muted small">
+        目前版本 {update?.currentVersion ?? server.update.currentVersion}
+        {#if update?.latestVersion}· 最新版本 {update.latestVersion}{/if}
+        {#if update?.available}· 有新版本可用{/if}
+        {#if update?.checkedAt}· 檢查於 {new Date(update.checkedAt).toLocaleTimeString('zh-TW')}{/if}
+      </p>
+      {#if update?.error}
+        <p class="error" role="alert">檢查更新失敗：{update.error}</p>
+      {/if}
+      {#if update?.installed}
+        <p class="muted small">已安裝更新。請在 OneComme 重新載入插件或重啟 OneComme。</p>
+      {/if}
+      <div class="row">
+        <button type="button" onclick={() => checkUpdate(true)} disabled={updating}>檢查更新</button>
+        <button type="button" class="primary" onclick={doInstall} disabled={updating || !update?.available}>安裝更新</button>
+        {#if update?.releaseUrl}
+          <a href={update.releaseUrl} target="_blank" rel="noreferrer">查看 release</a>
+        {/if}
+      </div>
     </section>
 
     <div class="savebar">
@@ -324,12 +403,14 @@
   .card { background: #1e2028; border: 1px solid #2c2f3a; border-radius: 10px; padding: 16px; margin: 16px 0; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
   .grid h2 { grid-column: 1 / -1; margin: 0; }
+  .grid .wide { grid-column: 1 / -1; }
   label { display: flex; flex-direction: column; gap: 4px; }
   label.check { flex-direction: row; align-items: center; gap: 8px; }
   input[type='text'], input[type='number'], select {
     background: #14151a; color: inherit; border: 1px solid #3a3d4a; border-radius: 6px; padding: 6px 8px; font: inherit;
   }
   input[type='color'] { width: 64px; height: 32px; background: none; border: none; }
+  input[type='range'] { width: 100%; accent-color: #8ab4ff; }
   button {
     background: #2e3140; color: inherit; border: 1px solid #444859; border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer;
   }
@@ -342,6 +423,7 @@
   .link { background: none; border: none; color: #ff9b9b; padding: 0 4px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
   .error { color: #ff8a8a; }
+  a { color: #8ab4ff; }
   .sessions, .raids { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
   .sessions li { display: flex; flex-direction: column; }
   ol.sections { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -380,6 +462,7 @@
   }
   @media (max-width: 640px) {
     .grid { grid-template-columns: 1fr; }
+    .grid .wide { grid-column: auto; }
     ol.sections li { grid-template-columns: auto 1fr; }
   }
 </style>

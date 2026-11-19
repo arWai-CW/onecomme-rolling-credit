@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS: Settings = {
   speed: 150,
   maxDuration: 120,
   startDelay: 1,
+  preDelay: 0,
   endHold: 5,
   fadeOut: 2,
   endTitle: '感謝收看',
@@ -36,6 +37,11 @@ export const DEFAULT_SETTINGS: Settings = {
   textColor: '#ffffff',
   accentColor: '#ffd36e',
   fontScale: 1,
+  backgroundType: 'none',
+  backgroundColor: '#000000',
+  backgroundImage: '',
+  backgroundOpacity: 0.6,
+  backgroundBlur: 12,
   excludedServices: [],
   showCredit: true,
   debugLog: false,
@@ -81,10 +87,21 @@ export function normalizeSettings(input: Partial<Settings> | undefined): Setting
   merged.speed = clampNumber(merged.speed, 5, 2000, DEFAULT_SETTINGS.speed)
   merged.maxDuration = clampNumber(merged.maxDuration, 0, 3600, DEFAULT_SETTINGS.maxDuration)
   merged.startDelay = clampNumber(merged.startDelay, 0, 60, DEFAULT_SETTINGS.startDelay)
+  merged.preDelay = clampNumber(merged.preDelay, 0, 60, DEFAULT_SETTINGS.preDelay)
   merged.endHold = clampNumber(merged.endHold, 0, 600, DEFAULT_SETTINGS.endHold)
   merged.fadeOut = clampNumber(merged.fadeOut, 0, 60, DEFAULT_SETTINGS.fadeOut)
   merged.fontScale = clampNumber(merged.fontScale, 0.3, 4, DEFAULT_SETTINGS.fontScale)
   if (merged.donationSort !== 'amount') merged.donationSort = 'time'
+  if (!['none', 'color', 'image'].includes(merged.backgroundType)) merged.backgroundType = 'none'
+  merged.backgroundColor = /^#[0-9a-f]{6}$/i.test(merged.backgroundColor)
+    ? merged.backgroundColor
+    : DEFAULT_SETTINGS.backgroundColor
+  merged.backgroundImage =
+    typeof merged.backgroundImage === 'string'
+      ? merged.backgroundImage.replace(/[\u0000-\u001F]/g, '').trim().slice(0, 2000)
+      : ''
+  merged.backgroundOpacity = clampNumber(merged.backgroundOpacity, 0, 1, DEFAULT_SETTINGS.backgroundOpacity)
+  merged.backgroundBlur = clampNumber(merged.backgroundBlur, 0, 40, DEFAULT_SETTINGS.backgroundBlur)
   return merged
 }
 

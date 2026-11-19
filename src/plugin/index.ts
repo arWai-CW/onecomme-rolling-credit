@@ -1,8 +1,10 @@
 // OneComme plugin entry. Bundled to dist/<name>/plugin.js (CommonJS) by esbuild.
 
+import { dirname, join } from 'node:path'
 import { createDefaultState, normalizeSettings } from '../shared/defaults'
-import { PLUGIN_UID, type PersistedState, type PluginAction, type ServiceInfo, type StateResponse } from '../shared/types'
+import { PLUGIN_UID, type PersistedState, type PluginAction, type ServiceInfo, type StateResponse, type UpdateStatus } from '../shared/types'
 import { applyComment, applyEvent, normalizeCommentsPayload, type IncomingComment, type IncomingEvent } from './aggregator'
+import { checkForUpdate, installUpdate } from './update'
 
 interface Store {
   get(key: string): unknown
@@ -29,6 +31,12 @@ let state: PersistedState = createDefaultState()
 let services: ServiceInfo[] = []
 let pro = false
 let saveTimer: ReturnType<typeof setTimeout> | undefined
+let pluginDir = ''
+let updateStatus: UpdateStatus | undefined
+let updateTimer: Promise<UpdateStatus> | undefined
+
+// Release workflow rewrites this tag to the release version.
+const VERSION = 'v0.1.0'
 
 function loadState(): PersistedState {
   const raw = store?.get(STATE_KEY) as Partial<PersistedState> | undefined
@@ -95,7 +103,18 @@ function parseBody(body: unknown): unknown {
 }
 
 function stateResponse(): StateResponse {
-  return { ...state, pro, services }
+  return { ...state, pro, services, update: updateStatus ?? { currentVersion: VERSION, available: false } }
+}
+
+async function runUpdate(task: () => Promise<UpdateStatus>): Promise<UpdateStatus> {
+  if (updateTimer) return updateTimer
+  updateTimer = task().then((status) => {
+    updateStatus = status
+    return status
+  }).finally(() => {
+    updateTimer = undefined
+  })
+  return updateTimer
 }
 
 // The official sample returns plain objects; OneComme serializes them.
@@ -106,7 +125,7 @@ function fail(code: number, message: string) {
   return { code, response: { error: message } }
 }
 
-function handleAction(a: PluginAction) {
+async function handleAction(a: PluginAction) {
   switch (a.action) {
     case 'settings':
       state.settings = normalizeSettings(a.settings)
@@ -133,8 +152,10 @@ function handleAction(a: PluginAction) {
       state.manualRaids = state.manualRaids.filter((r) => r.id !== a.id)
       for (const s of Object.values(state.sessions)) s.raids = s.raids.filter((r) => r.id !== a.id)
       break
-    default:
-      return fail(400, 'unknown action')
+    case 'checkUpdate':
+      return ok(await runUpdate(() => checkForUpdate(VERSION, a.force)))
+    case 'installUpdate':
+      return ok(await runUpdate(() => installUpdate(VERSION, pluginDir)))
   }
   saveNow()
   return ok(stateResponse())
@@ -143,14 +164,17 @@ function handleAction(a: PluginAction) {
 const plugin = {
   name: '片尾滾動名單 Rolling Credit',
   uid: PLUGIN_UID,
-  version: '0.1.0',
+  version: VERSION,
   author: 'onecomme-rolling-credit',
   url: `http://localhost:11180/plugins/${PLUGIN_UID}/settings.html`,
   permissions: ['comments', 'systemComment', 'events', 'services'],
   defaultState: { [STATE_KEY]: createDefaultState() },
 
-  init(api: { store: Store; log?: Logger }, initialData: { comments?: unknown; services?: unknown; pro?: boolean }) {
+  init(api: { store: Store; log?: Logger; dir?: unknown; filepath?: unknown }, initialData: { comments?: unknown; services?: unknown; pro?: boolean }) {
     store = api.store
+    const dir = typeof api.dir === 'string' ? api.dir : typeof api.filepath === 'string' ? dirname(api.filepath) : ''
+    pluginDir = dir || join(__dirname, '..', '..')
+    updateStatus = { currentVersion: VERSION, available: false }
     if (api.log) log = api.log
     state = loadState()
     pro = !!initialData?.pro
@@ -183,13 +207,16 @@ const plugin = {
 
   async request(req: PluginRequest) {
     try {
+      const params = new URLSearchParams(typeof req.url === 'string' ? req.url.split('?')[1] ?? '' : '')
+      if (params.get('action') === 'checkUpdate') return ok(await runUpdate(() => checkForUpdate(VERSION, params.get('force') === '1')))
+      if (params.get('action') === 'installUpdate') return ok(await runUpdate(() => installUpdate(VERSION, pluginDir)))
       if (req.method === 'GET') {
         return ok(stateResponse())
       }
       if (req.method === 'POST' || req.method === 'PUT') {
         const body = parseBody(req.body) as PluginAction | undefined
         if (!body || typeof body !== 'object' || typeof body.action !== 'string') return fail(400, 'invalid body')
-        return handleAction(body)
+        return await handleAction(body)
       }
       return fail(405, 'method not allowed')
     } catch (e) {

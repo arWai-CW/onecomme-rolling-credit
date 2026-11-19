@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          sed -i "s/^  version: '.*',$/  version: '$VERSION',/" src/plugin/index.ts
+          grep -q "  version: '$VERSION'," src/plugin/index.ts
+
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+
+      - name: Zip plugin folder
+        run: cd dist && zip -r "../onecomme-rolling-credit-${GITHUB_REF_NAME}.zip" onecomme-rolling-credit
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: onecomme-rolling-credit-*.zip
+          generate_release_notes: true

@@ -1,0 +1,26 @@
+{
+  "name": "onecomme-rolling-credit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OneComme plugin: end-of-stream rolling credits for YouTube (OBS browser source)",
+  "scripts": {
+    "dev": "vite --config vite.config.ts",
+    "build": "npm run build:web && npm run build:plugin",
+    "build:web": "vite build --config vite.config.ts",
+    "build:plugin": "node scripts/build-plugin.mjs",
+    "mock": "node scripts/mock-server.mjs",
+    "check": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.plugin.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@types/node": "26.6.5",
+    "esbuild": "0.28.2",
+    "svelte": "5.57.2",
+    "svelte-check": "4.7.7",
+    "typescript": "6.0.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

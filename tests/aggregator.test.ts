@@ -57,6 +57,18 @@ describe('applyComment', () => {
     expect(ss.milestones[0]!.detail).toBe('Member 12 months')
   })
 
+  it('derives the gift count when giftCount is missing', () => {
+    const s = createDefaultState()
+    applyComment(s, yt({
+      giftType: 'sponsorgift', userId: 'g1', name: 'G1',
+      giftReceivers: [{ userId: 'm1' }, { userId: 'm2' }, { userId: 'm3' }],
+    }))
+    applyComment(s, yt({ giftType: 'sponsorgift', userId: 'g2', name: 'G2', comment: 'gifted 5 memberships' }))
+    applyComment(s, yt({ giftType: 'sponsorgift', userId: 'g3', name: 'G3' }))
+    const g = s.sessions.frame1!.gifters
+    expect(g.map((x) => [x.userId, x.count])).toEqual([['g1', 3], ['g2', 5], ['g3', 1]])
+  })
+
   it('resets the frame when a new liveId arrives', () => {
     const s = createDefaultState()
     s.manualRaids.push({ id: 'm', name: 'Old', at: 0, manual: true })

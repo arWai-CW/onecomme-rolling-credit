@@ -198,6 +198,20 @@ function isYouTubeComment(c: IncomingComment): boolean {
 }
 
 /**
+ * How many memberships one 'sponsorgift' message gave. `giftCount` is set by
+ * recent わんコメ versions; older ones only list receivers or put "gifted N"
+ * in the comment text.
+ */
+function sponsorgiftCount(d: IncomingCommentData): number {
+  const n = Number(d.giftCount)
+  if (Number.isFinite(n) && n > 0) return n
+  const receivers = d.giftReceivers?.length ?? 0
+  if (receivers > 0) return receivers
+  const m = /gifted\s+(\d+)/i.exec(d.comment ?? '')
+  return m ? Number(m[1]) : 1
+}
+
+/**
  * Apply one comment. Returns true when the state changed.
  */
 export function applyComment(state: PersistedState, c: IncomingComment, now = Date.now()): boolean {
@@ -235,7 +249,7 @@ export function applyComment(state: PersistedState, c: IncomingComment, now = Da
       addMember(session, person, at, 'gift')
       return true
     case 'sponsorgift': {
-      const count = typeof d.giftCount === 'number' && d.giftCount > 0 ? d.giftCount : 1
+      const count = sponsorgiftCount(d)
       addGifter(session, person, at, count)
       for (const r of d.giftReceivers ?? []) {
         addMember(session, personOf(r), toTime(r.timestamp, at), 'gift')

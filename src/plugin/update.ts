@@ -92,13 +92,16 @@ async function extractZip(zip: string, dest: string): Promise<void> {
       script,
       [
         'param($zip, $dest)',
+        // Without Stop, a failed method call only prints an error and the script still exits 0.
+        "$ErrorActionPreference = 'Stop'",
         'Add-Type -AssemblyName System.IO.Compression.FileSystem',
         '$archive = [IO.Compression.ZipFile]::OpenRead($zip)',
         'try {',
         '  foreach ($entry in $archive.Entries) {',
         "    if ($entry.FullName -match '(^|[\\\\/])\\.\\.([\\\\/]|$)' -or $entry.FullName -match '^([A-Za-z]:|[\\\\/])') { throw 'unsafe zip entry' }",
         '  }',
-        '  $archive.ExtractToDirectory($dest)',
+        // ExtractToDirectory is an extension method; PowerShell cannot call it on the instance.
+        '  [IO.Compression.ZipFileExtensions]::ExtractToDirectory($archive, $dest)',
         '} finally { $archive.Dispose() }',
         '',
       ].join('\n'),

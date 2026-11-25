@@ -43,8 +43,9 @@ OneComme 插件。它統計本次直播的新會員、會員贈送、Super Chat 
 
 在設定頁開啟「除錯：把原始事件寫入 plugin.log」，然後檢查下列事件的實際資料：
 
-- 贈送會員時，`giftReceivers` 的內容。
 - YouTube redirect（降落）事件的形式和欄位，需要確認來源頻道名稱是否能取得。
+
+已確認（2026-11）：`sponsorgift` 沒有 `giftCount` / `giftReceivers` 欄位，贈送數量放在 `price`（`unit`/`paidText` 為空）。每個收到贈送的人是獨立的 `giftreceived` 事件。
 
 ## 安全性
 

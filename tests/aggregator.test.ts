@@ -65,8 +65,9 @@ describe('applyComment', () => {
     }))
     applyComment(s, yt({ giftType: 'sponsorgift', userId: 'g2', name: 'G2', comment: 'gifted 5 memberships' }))
     applyComment(s, yt({ giftType: 'sponsorgift', userId: 'g3', name: 'G3' }))
+    applyComment(s, yt({ giftType: 'sponsorgift', userId: 'g4', name: 'G4', comment: '贈送了 5 個「✨【黛比】」會籍' }))
     const g = s.sessions.frame1!.gifters
-    expect(g.map((x) => [x.userId, x.count])).toEqual([['g1', 3], ['g2', 5], ['g3', 1]])
+    expect(g.map((x) => [x.userId, x.count])).toEqual([['g1', 3], ['g2', 5], ['g3', 1], ['g4', 5]])
   })
 
   it('resets the frame when a new liveId arrives', () => {

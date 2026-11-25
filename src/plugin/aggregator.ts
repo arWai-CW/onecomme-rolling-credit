@@ -207,7 +207,9 @@ function sponsorgiftCount(d: IncomingCommentData): number {
   if (Number.isFinite(n) && n > 0) return n
   const receivers = d.giftReceivers?.length ?? 0
   if (receivers > 0) return receivers
-  const m = /gifted\s+(\d+)/i.exec(d.comment ?? '')
+  // shortcut: locale-specific comment text is all we have when giftCount and
+  // giftReceivers are missing; upgrade once real payload samples are logged.
+  const m = /gifted\s+(\d+)/i.exec(d.comment ?? '') ?? /(\d+)\s*[個件份名]/.exec(d.comment ?? '')
   return m ? Number(m[1]) : 1
 }
 

@@ -207,8 +207,12 @@ function sponsorgiftCount(d: IncomingCommentData): number {
   if (Number.isFinite(n) && n > 0) return n
   const receivers = d.giftReceivers?.length ?? 0
   if (receivers > 0) return receivers
-  // shortcut: locale-specific comment text is all we have when giftCount and
-  // giftReceivers are missing; upgrade once real payload samples are logged.
+  // 実測ペイロード: わんコメは贈送数を price に入れ、unit/paidText は空のまま。
+  // currency/unit が空のときだけ個数として使う（金額と誤用しないため）。
+  const price = Number(d.price)
+  if (!d.currency && !d.unit && Number.isInteger(price) && price > 0) return price
+  // shortcut: locale-specific comment text is the last resort when none of the
+  // structured fields carry the count; covers zh「N 個」/ ja「N件」/ en "gifted N".
   const m = /gifted\s+(\d+)/i.exec(d.comment ?? '') ?? /(\d+)\s*[個件份名]/.exec(d.comment ?? '')
   return m ? Number(m[1]) : 1
 }
